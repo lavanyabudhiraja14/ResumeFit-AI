@@ -12,11 +12,12 @@ class Settings(BaseSettings):
 
     # CORS origins
     CORS_ORIGINS: List[str] = [
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ]
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://resume-fit-ai.vercel.app",
+]
 
     # Authentication & Security
     SECRET_KEY: str = "resumefit_ai_dev_secret_key_2026_super_secure_auth_token"

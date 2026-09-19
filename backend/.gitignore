@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+
+# SQLite & Databases
+*.db
+*.sqlite
+*.sqlite3
+resumefit.db
+
+# Secrets and Env
+.env
+.env.*
+!.env.example
+
+# Pytest
+.pytest_cache/
+.coverage

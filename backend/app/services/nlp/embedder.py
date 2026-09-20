@@ -1,8 +1,15 @@
-"""Local embedding wrapper and semantic similarity calculator."""
+"""Local embedding wrapper and semantic similarity calculator.
+
+NOTE: This module intentionally does NOT depend on sentence-transformers/torch.
+That dependency pulls 500MB+ into memory at import time, which reliably OOMs
+on small hosting tiers (e.g. Render's free 512MB plan). Skill-similarity for
+this app is well covered by the curated domain-transfer table plus a fast
+character-trigram fallback, so the heavy model was removed rather than made
+"optional" -- an optional import still risks being triggered accidentally.
+"""
 
 import logging
 from typing import List, Optional
-import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -32,45 +39,20 @@ DOMAIN_RELATED_SKILLS = {
 
 class SemanticEmbedder:
     _instance = None
-    _model = None
 
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super(SemanticEmbedder, cls).__new__(cls)
-            cls._instance._init_model()
         return cls._instance
 
-    def _init_model(self):
-        self.model_loaded = False
-        self._model = None
-        self._load_attempted = False
-
-    def _get_model(self):
-        if not self._load_attempted:
-            self._load_attempted = True
-            try:
-                import os
-                # Allow enabling network model download only if explicit flag is set
-                allow_download = os.getenv("ENABLE_NEURAL_DOWNLOAD", "false").lower() == "true"
-                from sentence_transformers import SentenceTransformer
-                try:
-                    self._model = SentenceTransformer("all-MiniLM-L6-v2", local_files_only=True)
-                    self.model_loaded = True
-                except Exception:
-                    if allow_download:
-                        self._model = SentenceTransformer("all-MiniLM-L6-v2")
-                        self.model_loaded = True
-                    else:
-                        self._model = None
-                        self.model_loaded = False
-            except Exception as e:
-                logger.warning(f"SentenceTransformer not loaded, using domain transfer fallback: {e}")
-                self._model = None
-                self.model_loaded = False
-        return self._model
-
     def compute_similarity(self, text1: str, text2: str) -> float:
-        """Computes cosine semantic similarity between two terms or sentences."""
+        """Computes semantic similarity between two terms or sentences.
+
+        Uses (1) exact match, (2) a curated domain-transfer lookup table for
+        known related skills, then (3) a lightweight character-trigram
+        (Jaccard) fallback. No ML model is loaded, so this is fast and has a
+        negligible, constant memory footprint.
+        """
         t1 = text1.strip().lower()
         t2 = text2.strip().lower()
 
@@ -82,16 +64,6 @@ class SemanticEmbedder:
             return DOMAIN_RELATED_SKILLS[text1][text2]
         if text2 in DOMAIN_RELATED_SKILLS and text1 in DOMAIN_RELATED_SKILLS[text2]:
             return DOMAIN_RELATED_SKILLS[text2][text1]
-
-        # Use neural embedding model if available
-        model = self._get_model()
-        if model:
-            try:
-                embeddings = model.encode([text1, text2], normalize_embeddings=True)
-                sim = float(np.dot(embeddings[0], embeddings[1]))
-                return max(0.0, min(1.0, sim))
-            except Exception:
-                pass
 
         # Fast Jaccard character-trigram fallback
         return self._ngram_similarity(text1, text2)
